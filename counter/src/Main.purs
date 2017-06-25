@@ -6,11 +6,13 @@ import Control.Monad.Aff.Console (CONSOLE, log)
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Exception (Error)
 
-import Data.Maybe (Maybe (..), fromMaybe)
+import Data.Maybe (Maybe (..), fromMaybe, maybe)
 import Data.Either (Either (Left, Right), either)
 import Data.Array (head)
 
 import Data.Argonaut (class DecodeJson, Json, decodeJson, (.?))
+
+import Data.Argonaut.Core (toObject, JObject)
 
 import DOM (DOM)
 
@@ -85,9 +87,14 @@ todosToText e =
     Left a -> a
     Right b -> b
 
+-- testing
+decodeJObject :: Json -> Either String JObject
+decodeJObject = maybe (Left "Value is not an Object") Right <<< toObject    
+
 instance decodeJsonTodo :: DecodeJson Todo where
   decodeJson json = do
     obj <- decodeJson json
+    -- obj <- decodeJObject json
     id <- obj .? "id"
     title <- obj .? "title"
     pure $ Todo 
