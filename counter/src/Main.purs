@@ -1,7 +1,18 @@
 module Main where
 
 import Prelude hiding (div)
+import Control.Monad.Aff (Aff, attempt)
+import Control.Monad.Aff.Console (CONSOLE, log)
 import Control.Monad.Eff (Eff)
+import Control.Monad.Eff.Exception (Error)
+
+import Data.Maybe (Maybe (..))
+import Data.Either (Either (Left, Right), either)
+
+import Data.Argonaut (Json, decodeJson)
+
+import DOM (DOM)
+
 import Pux (CoreEffects, EffModel, start)
 import Pux.DOM.Events (onClick)
 import Pux.DOM.HTML (HTML)
@@ -9,26 +20,78 @@ import Pux.Renderer.React (renderToDOM)
 import Text.Smolder.HTML (button, div, span)
 import Text.Smolder.Markup (text, (#!))
 
-data Event = Increment | Decrement
+import Network.HTTP.Affjax (AJAX, get)
+import Network.HTTP.StatusCode (StatusCode)
+import Network.HTTP.ResponseHeader (ResponseHeader)
+import Network.HTTP.Affjax.Response (class Respondable)
 
-type State = Int 
+-- type AppEffects = (console :: CONSOLE, dom :: DOM, ajax :: AJAX)
+type AppEffects = (console :: CONSOLE, dom :: DOM, ajax :: AJAX)
 
-foldp :: forall fx. Event -> State -> EffModel State Event fx
-foldp Increment n = { state: n + 1, effects: [] }
-foldp Decrement n = { state: n - 1, effects: [] }
+data Event = Increment | Decrement | TestGet String
+
+type State = { count :: Int, info :: String } 
+
+type GetItem = String
+
+-- foldp :: forall fx. Event -> State -> EffModel State Event fx
+foldp :: Event -> State -> EffModel State Event AppEffects
+foldp Increment prevState = 
+  { state: prevState { count = prevState.count + 1 }
+  , effects: 
+      [ do
+          -- log "increment" *> pure Nothing 
+          log "increment"
+          -- res <- attempt $ get "http://jsonplaceholder.typicode.com/users/1/todos"
+          res <- tryGet "http://jsonplaceholder.typicode.com/users/1/todos"
+          -- let todos = either (Left <<< show) (decodeJson res.response :: Either String String)
+          -- let todos = either (Left <<< show) (decodeJson (res.response :: Either String String) )
+          -- let todos = either (Left <<< show) (decodeJson res.response :: Either String GetItem)
+          let todos = either (Left <<< show) decode res
+          pure $ Just $ 
+            -- TestGet "todos"
+            TestGet $ either (\_ -> "fail") (\_ -> "data") todos
+      ] 
+  }
+
+foldp Decrement state = { state: state { count = state.count - 1}, effects: [] }
+
+foldp (TestGet s) state = { state: state { info = s }, effects: []}
+
+todosToText :: forall String. Either String String
+todosToText e = 
+  case e of
+    Left a -> a
+    Right b -> b
+
+decode :: forall t. { response :: Json | t } -> Either String String
+decode r = decodeJson r.response :: Either String String
+
+tryGet :: forall a b. Respondable a => String -> Aff ( ajax :: AJAX| b ) 
+  (Either Error
+    { status :: StatusCode
+    , headers :: Array ResponseHeader
+    , response :: a
+    }
+  )
+tryGet url = attempt $ get url
+
 
 view :: State -> HTML Event
-view count = 
+view state = 
   div do
     button #! onClick (const Increment) $ text "Inc"
-    span $ text (show count)
+    span $ text (show state.count)
+    span $ text (show state.info)
     button #! onClick (const Decrement) $ text "Dec"
 
-main :: forall fx. Eff (CoreEffects fx) Unit
+main :: Eff (CoreEffects AppEffects) Unit
+-- main :: forall fx. Eff (console :: CONSOLE, CoreEffects fx) Unit
+-- main :: forall e. Eff (console :: CONSOLE, exception :: EXCEPTION | e) Unit
 main = do
   app <- start
     {
-      initialState: 0
+      initialState: { count: 0, info: "" }
     , view
     , foldp
     , inputs: []
