@@ -50,7 +50,7 @@ foldp Increment prevState =
           let todos = either (Left <<< show) decode res
           pure $ Just $ 
             -- TestGet "todos"
-            TestGet $ either (\_ -> "fail") (\_ -> "data") todos
+            TestGet $ either (\_ -> "fail") (\s -> s) todos
       ] 
   }
 
@@ -58,7 +58,7 @@ foldp Decrement state = { state: state { count = state.count - 1}, effects: [] }
 
 foldp (TestGet s) state = { state: state { info = s }, effects: []}
 
-todosToText :: forall String. Either String String
+todosToText :: forall a. Either a a -> a
 todosToText e = 
   case e of
     Left a -> a
