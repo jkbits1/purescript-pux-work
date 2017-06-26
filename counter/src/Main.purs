@@ -31,9 +31,13 @@ import Network.HTTP.Affjax.Response (class Respondable)
 -- type AppEffects = (console :: CONSOLE, dom :: DOM, ajax :: AJAX)
 type AppEffects = (console :: CONSOLE, dom :: DOM, ajax :: AJAX)
 
-data Event = Increment | Decrement | TestGet String
+data Event = Increment | Decrement | TestGet String | GetItems | ItemsArrived Todos
 
-type State = { count :: Int, info :: String } 
+type State = 
+  { count :: Int
+  , info :: String 
+  , items :: Array Todo
+  } 
 
 type GetItem = String
 
@@ -69,6 +73,20 @@ foldp Decrement state = { state: state { count = state.count - 1}, effects: [] }
 
 foldp (TestGet s) state = { state: state { info = s }, effects: []}
 
+foldp (GetItems) state = 
+  { state: state
+  , effects: 
+      [
+        do
+          log "GetItems"
+          resp <- tryGet "http://jsonplaceholder.typicode.com/users/1/todos"
+          let todosResp = either (Left <<< show) decodeTodos resp
+          pure $ Just $ ItemsArrived $ []
+      ]
+  }
+
+foldp (ItemsArrived todos) state = { state: state, effects: [] }
+
 defaultTodo :: Todo
 defaultTodo = Todo { id: 0, title: "no todo"}
 
@@ -93,8 +111,9 @@ decodeJObject = maybe (Left "Value is not an Object") Right <<< toObject
 
 instance decodeJsonTodo :: DecodeJson Todo where
   decodeJson json = do
-    obj <- decodeJson json
-    -- obj <- decodeJObject json
+    -- these lines are equivalent, 
+    -- obj <- decodeJson json
+    obj <- decodeJObject json
     id <- obj .? "id"
     title <- obj .? "title"
     pure $ Todo 
@@ -127,13 +146,15 @@ view state =
     span $ text (show state.info)
     button #! onClick (const Decrement) $ text "Dec"
 
+    button #! onClick (const GetItems) $ text "Get Items"
+
 main :: Eff (CoreEffects AppEffects) Unit
 -- main :: forall fx. Eff (console :: CONSOLE, CoreEffects fx) Unit
 -- main :: forall e. Eff (console :: CONSOLE, exception :: EXCEPTION | e) Unit
 main = do
   app <- start
     {
-      initialState: { count: 0, info: "" }
+      initialState: { count: 0, info: "", items: [] }
     , view
     , foldp
     , inputs: []
