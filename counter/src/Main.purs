@@ -20,7 +20,7 @@ import Pux (CoreEffects, EffModel, start)
 import Pux.DOM.Events (onClick)
 import Pux.DOM.HTML (HTML)
 import Pux.Renderer.React (renderToDOM)
-import Text.Smolder.HTML (button, div, span)
+import Text.Smolder.HTML (button, div, span, br)
 import Text.Smolder.Markup (text, (#!))
 
 import Network.HTTP.Affjax (AJAX, get)
@@ -34,11 +34,13 @@ type AppEffects = (console :: CONSOLE, dom :: DOM, ajax :: AJAX)
 data Event = 
     Increment | Decrement | TestGet String | GetItems 
   | ItemsArrived (Either String Todos)
+  | FirstItem
 
 type State = 
   { count :: Int
   , info :: String 
   , items :: Array Todo
+  , showFirstItem :: Boolean
   } 
 
 type GetItem = String
@@ -94,14 +96,16 @@ foldp (ItemsArrived (Right todos)) state = { state: state { items = todos }, eff
     log "items arrived" *> pure Nothing
   ] }
 
+foldp FirstItem state = { state: state { showFirstItem = true }, effects: [] }
+
 defaultTodo :: Todo
 defaultTodo = Todo { id: 0, title: "no todo"}
 
 todosToInfo :: Array Todo -> String
-todosToInfo = titleFromTodo <<< firstTodoText
+todosToInfo = titleFromTodo <<< firstTodo
 
-firstTodoText :: Array Todo -> Todo -- String
-firstTodoText ts = (fromMaybe defaultTodo $ head ts)
+firstTodo :: Array Todo -> Todo
+firstTodo ts = (fromMaybe defaultTodo $ head ts)
 
 titleFromTodo :: Todo -> String
 titleFromTodo (Todo todo) = todo.title
@@ -154,6 +158,12 @@ view state =
     button #! onClick (const Decrement) $ text "Dec"
 
     button #! onClick (const GetItems) $ text "Get Items"
+    br
+    button #! onClick (const FirstItem) $ text "Show First Item"
+    case state.showFirstItem of
+      true -> text $ todosToInfo state.items
+      false -> text "not shown"
+
 
 main :: Eff (CoreEffects AppEffects) Unit
 -- main :: forall fx. Eff (console :: CONSOLE, CoreEffects fx) Unit
@@ -161,7 +171,7 @@ main :: Eff (CoreEffects AppEffects) Unit
 main = do
   app <- start
     {
-      initialState: { count: 0, info: "", items: [] }
+      initialState: { count: 0, info: "", items: [], showFirstItem: false }
     , view
     , foldp
     , inputs: []
