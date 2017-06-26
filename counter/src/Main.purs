@@ -31,7 +31,9 @@ import Network.HTTP.Affjax.Response (class Respondable)
 -- type AppEffects = (console :: CONSOLE, dom :: DOM, ajax :: AJAX)
 type AppEffects = (console :: CONSOLE, dom :: DOM, ajax :: AJAX)
 
-data Event = Increment | Decrement | TestGet String | GetItems | ItemsArrived Todos
+data Event = 
+    Increment | Decrement | TestGet String | GetItems 
+  | ItemsArrived (Either String Todos)
 
 type State = 
   { count :: Int
@@ -81,11 +83,16 @@ foldp (GetItems) state =
           log "GetItems"
           resp <- tryGet "http://jsonplaceholder.typicode.com/users/1/todos"
           let todosResp = either (Left <<< show) decodeTodos resp
-          pure $ Just $ ItemsArrived $ []
+          pure $ Just $ 
+            ItemsArrived $ todosResp
       ]
   }
 
-foldp (ItemsArrived todos) state = { state: state, effects: [] }
+foldp (ItemsArrived (Left e)) state = { state: state { info = e}, effects: []}
+foldp (ItemsArrived (Right todos)) state = { state: state { items = todos }, effects: [
+  do
+    log "items arrived" *> pure Nothing
+  ] }
 
 defaultTodo :: Todo
 defaultTodo = Todo { id: 0, title: "no todo"}
